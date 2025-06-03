@@ -8,6 +8,7 @@ import com.insurance.infrastructure.messaging.service.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +18,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final EventPublisher eventPublisher;
 
     @Override
+    @Transactional
     public void processPayment(PolicyRequest request) {
         log.info("Processing payment for policy request: {}", request.getId());
         

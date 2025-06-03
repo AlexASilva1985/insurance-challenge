@@ -70,7 +70,7 @@ public class PolicyRequestServiceImpl implements PolicyRequestService {
             throw new IllegalStateException("Cannot transition from " + request.getStatus() + " to " + newStatus);
         }
         
-        request.addToHistory(newStatus);
+        request.updateStatus(newStatus);
         request = repository.save(request);
         
         String routingKey = switch (newStatus) {
@@ -198,17 +198,17 @@ public class PolicyRequestServiceImpl implements PolicyRequestService {
 
     private boolean validatePreferredCustomer(InsuranceCategory category, BigDecimal amount) {
         return switch (category) {
-            case LIFE -> amount.compareTo(new BigDecimal("800000.00")) <= 0;
-            case AUTO, RESIDENTIAL -> amount.compareTo(new BigDecimal("450000.00")) <= 0;
-            default -> amount.compareTo(new BigDecimal("375000.00")) <= 0;
+            case LIFE -> amount.compareTo(new BigDecimal("1000000.00")) <= 0;
+            case AUTO -> amount.compareTo(new BigDecimal("750000.00")) <= 0;
+            case RESIDENTIAL -> amount.compareTo(new BigDecimal("850000.00")) <= 0;
+            default -> amount.compareTo(new BigDecimal("500000.00")) <= 0;
         };
     }
 
     private boolean validateNoInformationCustomer(InsuranceCategory category, BigDecimal amount) {
         return switch (category) {
-            case LIFE, RESIDENTIAL -> amount.compareTo(new BigDecimal("200000.00")) <= 0;
-            case AUTO -> amount.compareTo(new BigDecimal("75000.00")) <= 0;
-            default -> amount.compareTo(new BigDecimal("55000.00")) <= 0;
+            case LIFE, AUTO, RESIDENTIAL -> amount.compareTo(new BigDecimal("100000.00")) <= 0;
+            default -> amount.compareTo(new BigDecimal("50000.00")) <= 0;
         };
     }
 } 

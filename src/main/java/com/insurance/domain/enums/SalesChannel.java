@@ -1,10 +1,9 @@
 package com.insurance.domain.enums;
 
 public enum SalesChannel {
-    MOBILE,
-    WEB,
     BROKER,
-    WHATSAPP,
+    WEBSITE,
+    MOBILE,
     CALL_CENTER,
-    AGENCY
+    BANK
 } 

@@ -5,6 +5,7 @@ import com.insurance.mapper.PolicyRequestMapper;
 import com.insurance.domain.PolicyRequest;
 import com.insurance.service.PolicyRequestService;
 import io.micrometer.core.annotation.Timed;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -49,8 +50,12 @@ public class PolicyRequestController {
     @Timed(value = "policy.request.get", description = "Time taken to get a policy request")
     public PolicyRequestDTO getPolicyRequest(@PathVariable UUID id) {
         log.info("Getting policy request: {}", id);
-        PolicyRequest entity = service.findById(id);
-        return mapper.toDTO(entity);
+        try {
+            PolicyRequest entity = service.findById(id);
+            return mapper.toDTO(entity);
+        } catch (EntityNotFoundException e) {
+            throw new EntityNotFoundException("Policy request not found with id: " + id);
+        }
     }
 
     @GetMapping("/customer/{customerId}")
@@ -109,6 +114,19 @@ public class PolicyRequestController {
         problem.setTitle("Invalid State Transition");
         return ResponseEntity
             .status(HttpStatus.UNPROCESSABLE_ENTITY)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problem);
+    }
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleEntityNotFound(EntityNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.NOT_FOUND,
+            ex.getMessage()
+        );
+        problem.setTitle("Resource Not Found");
+        return ResponseEntity
+            .status(HttpStatus.NOT_FOUND)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(problem);
     }

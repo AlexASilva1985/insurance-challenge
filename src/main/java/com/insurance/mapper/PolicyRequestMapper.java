@@ -65,8 +65,8 @@ public class PolicyRequestMapper {
         }
 
         StatusHistoryDTO dto = new StatusHistoryDTO();
-        dto.setStatus(entity.getStatus());
-        dto.setTimestamp(entity.getTimestamp());
+        dto.setStatus(entity.getNewStatus());
+        dto.setTimestamp(entity.getChangedAt());
         
         return dto;
     }

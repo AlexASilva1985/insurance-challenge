@@ -38,7 +38,7 @@ public class PolicyRequest extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private PolicyRequestStatus status;
+    private PolicyRequestStatus status = PolicyRequestStatus.RECEIVED;
 
     @Column(name = "total_monthly_premium_amount", nullable = false)
     private BigDecimal totalMonthlyPremiumAmount;
@@ -61,7 +61,7 @@ public class PolicyRequest extends BaseEntity {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "policy_request_id")
-    @OrderBy("createdAt DESC")
+    @OrderBy("changedAt DESC")
     private List<StatusHistory> statusHistory = new ArrayList<>();
 
     @OneToOne(cascade = CascadeType.ALL)
@@ -71,10 +71,46 @@ public class PolicyRequest extends BaseEntity {
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
 
-    public void addToHistory(PolicyRequestStatus newStatus) {
+    public void validate() {
+        if (customerId == null) {
+            throw new IllegalArgumentException("customerId is required");
+        }
+        if (productId == null) {
+            throw new IllegalArgumentException("productId is required");
+        }
+        if (category == null) {
+            throw new IllegalArgumentException("category is required");
+        }
+        if (salesChannel == null) {
+            throw new IllegalArgumentException("salesChannel is required");
+        }
+        if (paymentMethod == null) {
+            throw new IllegalArgumentException("paymentMethod is required");
+        }
+        if (totalMonthlyPremiumAmount == null || totalMonthlyPremiumAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("totalMonthlyPremiumAmount must be greater than zero");
+        }
+        if (insuredAmount == null || insuredAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("insuredAmount must be greater than zero");
+        }
+        if (coverages.isEmpty()) {
+            throw new IllegalArgumentException("At least one coverage is required");
+        }
+    }
+
+    public void updateStatus(PolicyRequestStatus newStatus) {
+        if (newStatus == null) {
+            throw new IllegalArgumentException("New status cannot be null");
+        }
+
+        if (!canTransitionTo(newStatus)) {
+            throw new IllegalStateException("Invalid status transition from " + this.status + " to " + newStatus);
+        }
+
         StatusHistory history = new StatusHistory();
-        history.setFromStatus(this.status);
-        history.setToStatus(newStatus);
+        history.setPolicyRequestId(this.getId());
+        history.setPreviousStatus(this.status);
+        history.setNewStatus(newStatus);
         history.setChangedAt(LocalDateTime.now());
         
         this.statusHistory.add(history);
@@ -105,5 +141,25 @@ public class PolicyRequest extends BaseEntity {
             case APPROVED -> false; // Não pode mudar após aprovado
             case REJECTED, CANCELLED -> false; // Estados finais
         };
+    }
+
+    public BigDecimal calculateTotalCoverageAmount() {
+        return coverages.values()
+                       .stream()
+                       .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public void setTotalMonthlyPremiumAmount(BigDecimal totalMonthlyPremiumAmount) {
+        if (totalMonthlyPremiumAmount == null || totalMonthlyPremiumAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("totalMonthlyPremiumAmount must be greater than zero");
+        }
+        this.totalMonthlyPremiumAmount = totalMonthlyPremiumAmount;
+    }
+
+    public void setInsuredAmount(BigDecimal insuredAmount) {
+        if (insuredAmount == null || insuredAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("insuredAmount must be greater than zero");
+        }
+        this.insuredAmount = insuredAmount;
     }
 } 

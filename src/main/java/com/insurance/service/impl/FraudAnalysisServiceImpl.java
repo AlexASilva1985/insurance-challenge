@@ -9,6 +9,7 @@ import com.insurance.infrastructure.client.dto.FraudAnalysisResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -18,27 +19,29 @@ public class FraudAnalysisServiceImpl implements FraudAnalysisService {
     private final FraudAnalysisClient fraudAnalysisClient;
 
     @Override
+    @Transactional
     public RiskAnalysis analyzeFraud(PolicyRequest request) {
-        log.info("Analyzing fraud for policy request: {}", request.getId());
-        
+        log.info("Starting fraud analysis for policy request: {}", request.getId());
+
         FraudAnalysisResponse response = fraudAnalysisClient.analyzeFraud(
-            request.getId(), 
+            request.getId(),
             request.getCustomerId()
         );
 
         RiskAnalysis riskAnalysis = new RiskAnalysis();
         riskAnalysis.setClassification(response.getClassification());
         riskAnalysis.setAnalyzedAt(response.getAnalyzedAt());
-        riskAnalysis.setOccurrences(response.getOccurrences().stream()
-            .map(this::mapToRiskOccurrence)
-            .toList());
+
+        for (FraudAnalysisResponse.RiskOccurrenceResponse occurrenceResponse : response.getOccurrences()) {
+            RiskOccurrence occurrence = mapToRiskOccurrence(occurrenceResponse);
+            riskAnalysis.addOccurrence(occurrence);
+        }
 
         return riskAnalysis;
     }
 
     private RiskOccurrence mapToRiskOccurrence(FraudAnalysisResponse.RiskOccurrenceResponse response) {
         RiskOccurrence occurrence = new RiskOccurrence();
-        occurrence.setProductId(response.getId());
         occurrence.setType(response.getType());
         occurrence.setDescription(response.getDescription());
         occurrence.setCreatedAt(response.getCreatedAt());

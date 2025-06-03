@@ -1,6 +1,6 @@
 package com.insurance.domain.enums;
 
-public enum InsuranceCategory {
+public enum InsuranceType {
     AUTO,
     LIFE,
     RESIDENTIAL,

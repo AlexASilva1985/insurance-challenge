@@ -26,7 +26,7 @@ public class PolicyRequestDTO {
     @NotNull(message = "Product ID is required")
     private UUID productId;
     
-    @NotNull(message = "Insurance category is required")
+    @NotNull(message = "Category is required")
     private InsuranceCategory category;
     
     @NotNull(message = "Sales channel is required")
