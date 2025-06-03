@@ -15,4 +15,4 @@ public abstract class PolicyRequestEvent {
     private final PolicyRequestStatus status;
     private final LocalDateTime timestamp = LocalDateTime.now();
     private final String eventType = this.getClass().getSimpleName();
-} 
+}
