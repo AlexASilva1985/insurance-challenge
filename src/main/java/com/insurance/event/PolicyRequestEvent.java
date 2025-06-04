@@ -1,11 +1,10 @@
 package com.insurance.event;
 
 import com.insurance.domain.enums.PolicyRequestStatus;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor

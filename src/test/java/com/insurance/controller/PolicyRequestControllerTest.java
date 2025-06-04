@@ -12,11 +12,14 @@ import com.insurance.service.PolicyRequestService;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -29,20 +32,22 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(PolicyRequestController.class)
+@ExtendWith(MockitoExtension.class)
 class PolicyRequestControllerTest {
 
-    @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
-    @MockBean
+    @Mock
     private PolicyRequestService service;
 
-    @MockBean
+    @Mock
     private PolicyRequestMapper mapper;
+
+    @InjectMocks
+    private PolicyRequestController controller;
 
     private PolicyRequestDTO requestDTO;
     private PolicyRequest policyRequest;
@@ -50,11 +55,13 @@ class PolicyRequestControllerTest {
     private UUID customerId;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .build();
+
         policyId = UUID.randomUUID();
         customerId = UUID.randomUUID();
 
-        // Configurando o DTO
         requestDTO = new PolicyRequestDTO();
         requestDTO.setCustomerId(customerId);
         requestDTO.setProductId(UUID.randomUUID());
@@ -69,7 +76,6 @@ class PolicyRequestControllerTest {
         }});
         requestDTO.setAssistances(Arrays.asList("Roadside Assistance", "Glass Protection"));
 
-        // Configurando a entidade
         policyRequest = new PolicyRequest();
         policyRequest.setId(policyId);
         policyRequest.setCustomerId(customerId);
@@ -78,7 +84,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void createPolicyRequest_ShouldReturnCreatedStatus() throws Exception {
+    void testCreatePolicyRequestCreatedStatus() throws Exception {
         when(mapper.toEntity(any(PolicyRequestDTO.class))).thenReturn(policyRequest);
         when(service.createPolicyRequest(any(PolicyRequest.class))).thenReturn(policyRequest);
         when(mapper.toDTO(any(PolicyRequest.class))).thenReturn(requestDTO);
@@ -94,9 +100,9 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void getPolicyRequest_ShouldReturnPolicyRequest() throws Exception {
+    void testGetPolicyRequest() throws Exception {
         when(service.findById(policyId)).thenReturn(policyRequest);
-        when(mapper.toDTO(policyRequest)).thenReturn(requestDTO);
+        when(mapper.toDTO(any(PolicyRequest.class))).thenReturn(requestDTO);
 
         mockMvc.perform(get("/api/v1/policy-requests/{id}", policyId))
                 .andExpect(status().isOk())
@@ -106,7 +112,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void getPolicyRequestsByCustomer_ShouldReturnList() throws Exception {
+    void testGetPolicyRequestsByCustomerList() throws Exception {
         List<PolicyRequest> policyRequests = Arrays.asList(policyRequest);
         when(service.findByCustomerId(customerId)).thenReturn(policyRequests);
         when(mapper.toDTO(any(PolicyRequest.class))).thenReturn(requestDTO);
@@ -119,7 +125,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void validate_ShouldReturnOk() throws Exception {
+    void testValidateReturnOk() throws Exception {
         doNothing().when(service).validatePolicyRequest(policyId);
 
         mockMvc.perform(post("/api/v1/policy-requests/{id}/validate", policyId))
@@ -129,7 +135,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void processFraudAnalysis_ShouldReturnOk() throws Exception {
+    void testProcessFraudAnalysisReturnOk() throws Exception {
         doNothing().when(service).processFraudAnalysis(policyId);
 
         mockMvc.perform(post("/api/v1/policy-requests/{id}/fraud-analysis", policyId))
@@ -139,7 +145,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void processPayment_ShouldReturnOk() throws Exception {
+    void testProcessPaymentReturnOk() throws Exception {
         doNothing().when(service).processPayment(policyId);
 
         mockMvc.perform(post("/api/v1/policy-requests/{id}/payment", policyId))
@@ -149,7 +155,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void processSubscription_ShouldReturnOk() throws Exception {
+    void testProcessSubscriptionReturnOk() throws Exception {
         doNothing().when(service).processSubscription(policyId);
 
         mockMvc.perform(post("/api/v1/policy-requests/{id}/subscription", policyId))
@@ -159,7 +165,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void cancelPolicyRequest_ShouldReturnOk() throws Exception {
+    void testCancelPolicyRequestReturnOk() throws Exception {
         doNothing().when(service).cancelPolicyRequest(policyId);
 
         mockMvc.perform(post("/api/v1/policy-requests/{id}/cancel", policyId))
@@ -169,7 +175,7 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void createPolicyRequest_WithInvalidData_ShouldReturnBadRequest() throws Exception {
+    void testCreatePolicyRequestReturnBadRequest() throws Exception {
         requestDTO.setCustomerId(null); // Tornando o DTO inválido
 
         mockMvc.perform(post("/api/v1/policy-requests")
@@ -181,10 +187,10 @@ class PolicyRequestControllerTest {
     }
 
     @Test
-    void getPolicyRequest_WithNonExistentId_ShouldReturnNotFound() throws Exception {
+    void testGetPolicyRequestReturnNotFound() throws Exception {
         when(service.findById(any(UUID.class))).thenThrow(new EntityNotFoundException("Policy request not found"));
 
         mockMvc.perform(get("/api/v1/policy-requests/{id}", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
     }
-} 
+}

@@ -4,8 +4,6 @@ import com.insurance.domain.enums.InsuranceCategory;
 import com.insurance.domain.enums.PaymentMethod;
 import com.insurance.domain.enums.PolicyRequestStatus;
 import com.insurance.domain.enums.SalesChannel;
-import lombok.Data;
-
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
@@ -15,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.Data;
 
 @Data
 public class PolicyRequestDTO {
@@ -51,5 +50,5 @@ public class PolicyRequestDTO {
     private Map<String, BigDecimal> coverages = new HashMap<>();
     
     private List<String> assistances = new ArrayList<>();
-    private List<StatusHistoryDTO> history = new ArrayList<>();
+    private List<StatusHistoryDTO> history;
 } 

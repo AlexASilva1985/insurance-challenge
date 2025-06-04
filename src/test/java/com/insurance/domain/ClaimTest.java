@@ -1,16 +1,19 @@
 package com.insurance.domain;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.insurance.domain.enums.ClaimStatus;
 import com.insurance.domain.enums.InsuranceType;
 import com.insurance.domain.enums.PolicyStatus;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class ClaimTest {
 
@@ -49,7 +52,7 @@ class ClaimTest {
     }
 
     @Test
-    void shouldCreateClaimWithCorrectData() {
+    void testCreateClaimWithCorrectData() {
         assertNotNull(claim);
         assertEquals(claimNumber, claim.getClaimNumber());
         assertEquals(incidentDate, claim.getIncidentDate());
@@ -62,7 +65,7 @@ class ClaimTest {
     }
 
     @Test
-    void shouldValidateRequiredFields() {
+    void testValidateRequiredFields() {
         Claim invalidClaim = new Claim();
         
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
@@ -87,7 +90,7 @@ class ClaimTest {
     }
 
     @Test
-    void shouldValidateIncidentDate() {
+    void testValidateIncidentDate() {
         // Data futura não deve ser permitida
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
             claim.setIncidentDate(LocalDate.now().plusDays(1));
@@ -107,7 +110,7 @@ class ClaimTest {
     }
 
     @Test
-    void shouldValidateClaimAmount() {
+    void testValidateClaimAmount() {
         // Valor negativo não deve ser permitido
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
             claim.setClaimAmount(new BigDecimal("-1.00"));
@@ -133,7 +136,7 @@ class ClaimTest {
     }
 
     @Test
-    void shouldHandleStatusTransitions() {
+    void testHandleStatusTransitions() {
         // Iniciando com SUBMITTED
         assertEquals(ClaimStatus.SUBMITTED, claim.getStatus());
 
@@ -163,7 +166,7 @@ class ClaimTest {
     }
 
     @Test
-    void shouldValidateClaimNumber() {
+    void testValidateClaimNumber() {
         // Número do sinistro não pode ser vazio
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
             claim.setClaimNumber("");
@@ -187,4 +190,4 @@ class ClaimTest {
             claim.setClaimNumber("CLM12345678");
         });
     }
-} 
+}

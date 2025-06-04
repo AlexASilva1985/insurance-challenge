@@ -1,11 +1,10 @@
 package com.insurance.infrastructure.client.dto;
 
 import com.insurance.domain.enums.CustomerRiskType;
-import lombok.Data;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import lombok.Data;
 
 @Data
 public class FraudAnalysisResponse {

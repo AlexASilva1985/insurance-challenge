@@ -1,20 +1,23 @@
 package com.insurance.domain;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.insurance.domain.enums.InsuranceCategory;
 import com.insurance.domain.enums.PaymentMethod;
 import com.insurance.domain.enums.PolicyRequestStatus;
 import com.insurance.domain.enums.SalesChannel;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class PolicyRequestTest {
 
@@ -47,7 +50,7 @@ class PolicyRequestTest {
     }
 
     @Test
-    void shouldCreatePolicyRequestWithCorrectData() {
+    void testCreatePolicyRequestWithCorrectData() {
         assertNotNull(policyRequest.getId());
         assertEquals(customerId, policyRequest.getCustomerId());
         assertEquals(productId, policyRequest.getProductId());
@@ -63,7 +66,7 @@ class PolicyRequestTest {
     }
 
     @Test
-    void shouldUpdateStatusAndCreateStatusHistory() {
+    void testUpdateStatusAndCreateStatusHistory() {
         policyRequest.updateStatus(PolicyRequestStatus.VALIDATED);
         
         assertEquals(PolicyRequestStatus.VALIDATED, policyRequest.getStatus());
@@ -77,7 +80,7 @@ class PolicyRequestTest {
     }
 
     @Test
-    void shouldAddRiskAnalysis() {
+    void testAddRiskAnalysis() {
         RiskAnalysis riskAnalysis = new RiskAnalysis();
         riskAnalysis.setId(UUID.randomUUID());
         riskAnalysis.setAnalyzedAt(LocalDateTime.now());
@@ -89,7 +92,7 @@ class PolicyRequestTest {
     }
 
     @Test
-    void shouldValidateRequiredFields() {
+    void testValidateRequiredFields() {
         PolicyRequest invalidRequest = new PolicyRequest();
         
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
@@ -107,13 +110,13 @@ class PolicyRequestTest {
     }
 
     @Test
-    void shouldCalculateTotalCoverageAmount() {
+    void testCalculateTotalCoverageAmount() {
         BigDecimal total = policyRequest.calculateTotalCoverageAmount();
         assertEquals(new BigDecimal("50000.00"), total);
     }
 
     @Test
-    void shouldValidateStatusTransitions() {
+    void testValidateStatusTransitions() {
         // Transição válida
         assertDoesNotThrow(() -> {
             policyRequest.updateStatus(PolicyRequestStatus.VALIDATED);
@@ -128,7 +131,7 @@ class PolicyRequestTest {
     }
 
     @Test
-    void shouldNotAllowInvalidAmounts() {
+    void testNotAllowInvalidAmounts() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
             policyRequest.setTotalMonthlyPremiumAmount(BigDecimal.ZERO);
         });

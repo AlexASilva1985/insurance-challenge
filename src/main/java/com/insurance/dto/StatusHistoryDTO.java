@@ -1,9 +1,8 @@
 package com.insurance.dto;
 
 import com.insurance.domain.enums.PolicyRequestStatus;
-import lombok.Data;
-
 import java.time.LocalDateTime;
+import lombok.Data;
 
 @Data
 public class StatusHistoryDTO {

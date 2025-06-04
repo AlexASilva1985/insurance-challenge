@@ -3,9 +3,9 @@ package com.insurance.service.impl;
 import com.insurance.domain.PolicyRequest;
 import com.insurance.domain.enums.PolicyRequestStatus;
 import com.insurance.event.PolicyRequestEvent;
-import com.insurance.service.SubscriptionService;
 import com.insurance.infrastructure.messaging.config.RabbitMQConfig;
 import com.insurance.infrastructure.messaging.service.EventPublisher;
+import com.insurance.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             throw new IllegalStateException("Cannot process subscription for request in status: " + request.getStatus());
         }
         
-        // Publica evento de subscrição para processamento assíncrono
         eventPublisher.publish(
             RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
             RabbitMQConfig.POLICY_APPROVED_KEY,

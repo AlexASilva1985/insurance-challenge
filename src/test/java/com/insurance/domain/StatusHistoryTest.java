@@ -1,13 +1,16 @@
 package com.insurance.domain;
 
-import com.insurance.domain.enums.PolicyRequestStatus;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.insurance.domain.enums.PolicyRequestStatus;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class StatusHistoryTest {
 
@@ -25,7 +28,7 @@ class StatusHistoryTest {
     }
 
     @Test
-    void shouldCreateStatusHistoryWithCorrectData() {
+    void testCreateStatusHistoryWithCorrectData() {
         assertNotNull(statusHistory);
         assertEquals(policyRequestId, statusHistory.getPolicyRequestId());
         assertEquals(PolicyRequestStatus.RECEIVED, statusHistory.getPreviousStatus());
@@ -34,7 +37,7 @@ class StatusHistoryTest {
     }
 
     @Test
-    void shouldValidateRequiredFields() {
+    void testValidateRequiredFields() {
         StatusHistory invalidHistory = new StatusHistory();
         
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
@@ -52,14 +55,14 @@ class StatusHistoryTest {
     }
 
     @Test
-    void shouldNotAllowSameStatusValues() {
+    void testNotAllowSameStatusValues() {
         assertThrows(IllegalArgumentException.class, () -> {
             statusHistory.setNewStatus(statusHistory.getPreviousStatus());
         });
     }
 
     @Test
-    void shouldValidateStatusTransitions() {
+    void testValidateStatusTransitions() {
         // Transição válida
         assertDoesNotThrow(() -> {
             statusHistory.setPreviousStatus(PolicyRequestStatus.VALIDATED);
@@ -75,7 +78,7 @@ class StatusHistoryTest {
     }
 
     @Test
-    void shouldAutomaticallySetCreatedAtOnNew() {
+    void testAutomaticallySetCreatedAtOnNew() {
         StatusHistory newHistory = new StatusHistory();
         newHistory.setPolicyRequestId(UUID.randomUUID());
         newHistory.setPreviousStatus(PolicyRequestStatus.RECEIVED);

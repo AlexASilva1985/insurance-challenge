@@ -1,12 +1,11 @@
 package com.insurance.mapper;
 
-import com.insurance.dto.PolicyRequestDTO;
-import com.insurance.dto.StatusHistoryDTO;
 import com.insurance.domain.PolicyRequest;
 import com.insurance.domain.StatusHistory;
-import org.springframework.stereotype.Component;
-
+import com.insurance.dto.PolicyRequestDTO;
+import com.insurance.dto.StatusHistoryDTO;
 import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
 
 @Component
 public class PolicyRequestMapper {

@@ -7,22 +7,21 @@ import com.insurance.domain.enums.InsuranceCategory;
 import com.insurance.domain.enums.PolicyRequestStatus;
 import com.insurance.event.PolicyRequestCreatedEvent;
 import com.insurance.event.PolicyRequestEvent;
+import com.insurance.infrastructure.messaging.config.RabbitMQConfig;
+import com.insurance.infrastructure.messaging.service.EventPublisher;
 import com.insurance.repository.PolicyRequestRepository;
 import com.insurance.service.FraudAnalysisService;
 import com.insurance.service.PaymentService;
 import com.insurance.service.PolicyRequestService;
 import com.insurance.service.SubscriptionService;
-import com.insurance.infrastructure.messaging.config.RabbitMQConfig;
-import com.insurance.infrastructure.messaging.service.EventPublisher;
 import jakarta.persistence.EntityNotFoundException;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor

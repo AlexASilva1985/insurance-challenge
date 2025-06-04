@@ -1,12 +1,11 @@
 package com.insurance.infrastructure.client;
 
 import com.insurance.infrastructure.client.dto.FraudAnalysisResponse;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
