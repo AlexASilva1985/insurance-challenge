@@ -570,7 +570,6 @@ class PolicyRequestTest {
         assertTrue(policyRequest.getCoverages().containsKey("FIRE"));
         assertTrue(policyRequest.getCoverages().containsKey("FLOOD"));
         
-        // Test adding assistances
         List<String> newAssistances = List.of("24h Towing", "Emergency Service", "Rental Car");
         policyRequest.setAssistances(newAssistances);
         
@@ -582,45 +581,39 @@ class PolicyRequestTest {
 
     @Test
     void testDifferentInsuranceCategories() {
-        // Test LIFE insurance
+
         policyRequest.setCategory(InsuranceCategory.LIFE);
         assertEquals(InsuranceCategory.LIFE, policyRequest.getCategory());
         
-        // Test RESIDENTIAL insurance
         policyRequest.setCategory(InsuranceCategory.RESIDENTIAL);
         assertEquals(InsuranceCategory.RESIDENTIAL, policyRequest.getCategory());
         
-        // Test TRAVEL insurance
         policyRequest.setCategory(InsuranceCategory.TRAVEL);
         assertEquals(InsuranceCategory.TRAVEL, policyRequest.getCategory());
     }
 
     @Test
     void testDifferentSalesChannels() {
-        // Test MOBILE sales channel
+
         policyRequest.setSalesChannel(SalesChannel.MOBILE);
         assertEquals(SalesChannel.MOBILE, policyRequest.getSalesChannel());
         
-        // Test WEBSITE sales channel
         policyRequest.setSalesChannel(SalesChannel.WEBSITE);
         assertEquals(SalesChannel.WEBSITE, policyRequest.getSalesChannel());
         
-        // Test CALL_CENTER sales channel
         policyRequest.setSalesChannel(SalesChannel.CALL_CENTER);
         assertEquals(SalesChannel.CALL_CENTER, policyRequest.getSalesChannel());
     }
 
     @Test
     void testDifferentPaymentMethods() {
-        // Test DEBIT_CARD payment method
+
         policyRequest.setPaymentMethod(PaymentMethod.DEBIT_CARD);
         assertEquals(PaymentMethod.DEBIT_CARD, policyRequest.getPaymentMethod());
         
-        // Test BANK_TRANSFER payment method
         policyRequest.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
         assertEquals(PaymentMethod.BANK_TRANSFER, policyRequest.getPaymentMethod());
         
-        // Test PIX payment method
         policyRequest.setPaymentMethod(PaymentMethod.PIX);
         assertEquals(PaymentMethod.PIX, policyRequest.getPaymentMethod());
     }
@@ -637,25 +630,21 @@ class PolicyRequestTest {
         assertNotNull(policyRequest.getRiskAnalysis());
         assertEquals(riskAnalysis, policyRequest.getRiskAnalysis());
         
-        // Test removing risk analysis
         policyRequest.setRiskAnalysis(null);
         assertNull(policyRequest.getRiskAnalysis());
     }
 
     @Test
     void testStatusHistoryOrdering() {
-        // Add multiple status changes
+
         policyRequest.updateStatus(PolicyRequestStatus.VALIDATED);
         policyRequest.updateStatus(PolicyRequestStatus.PENDING);
         policyRequest.updateStatus(PolicyRequestStatus.APPROVED);
         
         assertEquals(3, policyRequest.getStatusHistory().size());
         
-        // Status history should be ordered by changedAt DESC (most recent first)
         List<StatusHistory> history = policyRequest.getStatusHistory();
-        
-        // Check that the entries are in chronological order (assuming they were added sequentially)
-        // The most recent entry should be the APPROVED one
+
         assertTrue(history.get(0).getNewStatus() == PolicyRequestStatus.APPROVED ||
                   history.get(1).getNewStatus() == PolicyRequestStatus.APPROVED ||
                   history.get(2).getNewStatus() == PolicyRequestStatus.APPROVED);
@@ -665,7 +654,6 @@ class PolicyRequestTest {
     void testFinishedAtTimestamp() {
         assertNull(policyRequest.getFinishedAt());
         
-        // Test APPROVED sets finishedAt
         policyRequest.updateStatus(PolicyRequestStatus.VALIDATED);
         policyRequest.updateStatus(PolicyRequestStatus.PENDING);
         policyRequest.updateStatus(PolicyRequestStatus.APPROVED);

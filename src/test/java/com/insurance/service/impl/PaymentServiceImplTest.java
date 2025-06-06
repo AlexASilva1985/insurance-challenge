@@ -1,7 +1,15 @@
 package com.insurance.service.impl;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.mock;
 
 import com.insurance.domain.PolicyRequest;
 import com.insurance.domain.enums.InsuranceCategory;
@@ -14,6 +22,7 @@ import com.insurance.infrastructure.messaging.service.EventPublisher;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -111,5 +120,115 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(requestId, capturedEvent.getPolicyRequestId());
         org.junit.jupiter.api.Assertions.assertEquals(customerId, capturedEvent.getCustomerId());
         org.junit.jupiter.api.Assertions.assertEquals(PolicyRequestStatus.VALIDATED, capturedEvent.getStatus());
+    }
+
+    @Test
+    void testProcessPaymentWithEventPublisherError() {
+        doThrow(new RuntimeException("Failed to publish event"))
+            .when(eventPublisher)
+            .publish(any(), any(), any());
+
+        assertThrows(RuntimeException.class, () ->
+            paymentService.processPayment(policyRequest)
+        );
+
+        verify(eventPublisher).publish(
+            eq(RabbitMQConfig.POLICY_EVENTS_EXCHANGE),
+            eq(RabbitMQConfig.PAYMENT_REQUESTED_KEY),
+            eventCaptor.capture()
+        );
+    }
+
+    @Test
+    void testProcessPaymentWithNullRequest() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            paymentService.processPayment(null);
+        });
+
+        verify(eventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    void testProcessPaymentWithNullRequestId() {
+        policyRequest.setId(null);
+        
+        assertThrows(IllegalArgumentException.class, () -> {
+            paymentService.processPayment(policyRequest);
+        });
+
+        verify(eventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    void testProcessPaymentWithNullCustomerId() {
+        policyRequest.setCustomerId(null);
+        
+        assertThrows(IllegalArgumentException.class, () -> {
+            paymentService.processPayment(policyRequest);
+        });
+
+        verify(eventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    void testProcessPaymentWithNullPaymentMethod() {
+        policyRequest.setPaymentMethod(null);
+        
+        assertThrows(IllegalArgumentException.class, () -> {
+            paymentService.processPayment(policyRequest);
+        });
+
+        verify(eventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    void testProcessPaymentWithZeroAmount() {
+        PolicyRequest mockRequest = mock(PolicyRequest.class);
+        when(mockRequest.getId()).thenReturn(requestId);
+        when(mockRequest.getCustomerId()).thenReturn(customerId);
+        when(mockRequest.getPaymentMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
+        when(mockRequest.getTotalMonthlyPremiumAmount()).thenReturn(BigDecimal.ZERO);
+
+        assertThrows(IllegalArgumentException.class, () ->
+            paymentService.processPayment(mockRequest)
+        );
+
+        verify(eventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    void testProcessPaymentWithNegativeAmount() {
+        PolicyRequest mockRequest = mock(PolicyRequest.class);
+        when(mockRequest.getId()).thenReturn(requestId);
+        when(mockRequest.getCustomerId()).thenReturn(customerId);
+        when(mockRequest.getPaymentMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
+        when(mockRequest.getTotalMonthlyPremiumAmount()).thenReturn(new BigDecimal("-100.00"));
+
+        assertThrows(IllegalArgumentException.class, () ->
+            paymentService.processPayment(mockRequest)
+        );
+
+        verify(eventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    void testProcessPaymentWithAllPaymentMethods() {
+        for (PaymentMethod method : PaymentMethod.values()) {
+            policyRequest.setPaymentMethod(method);
+            paymentService.processPayment(policyRequest);
+        }
+
+        verify(eventPublisher, times(PaymentMethod.values().length))
+            .publish(eq(RabbitMQConfig.POLICY_EVENTS_EXCHANGE), 
+                    eq(RabbitMQConfig.PAYMENT_REQUESTED_KEY), 
+                    eventCaptor.capture());
+
+        List<PolicyRequestEvent> events = eventCaptor.getAllValues();
+        assertEquals(PaymentMethod.values().length, events.size());
+        
+        for (int i = 0; i < events.size(); i++) {
+            assertEquals(requestId, events.get(i).getPolicyRequestId());
+            assertEquals(customerId, events.get(i).getCustomerId());
+        }
     }
 } 

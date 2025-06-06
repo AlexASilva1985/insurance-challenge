@@ -5,8 +5,7 @@ import com.insurance.domain.RiskAnalysis;
 import com.insurance.domain.enums.CustomerRiskType;
 import com.insurance.domain.enums.InsuranceCategory;
 import com.insurance.domain.enums.PolicyRequestStatus;
-import com.insurance.event.PolicyRequestCreatedEvent;
-import com.insurance.event.PolicyRequestEvent;
+import com.insurance.event.*;
 import com.insurance.infrastructure.messaging.config.RabbitMQConfig;
 import com.insurance.infrastructure.messaging.service.EventPublisher;
 import com.insurance.repository.PolicyRequestRepository;
@@ -72,18 +71,28 @@ public class PolicyRequestServiceImpl implements PolicyRequestService {
         request.updateStatus(newStatus);
         request = repository.save(request);
         
+        PolicyRequestEvent event = switch (newStatus) {
+            case VALIDATED -> new PolicyValidatedEvent(request);
+            case REJECTED -> new PolicyRejectedEvent(request);
+            case APPROVED -> new SubscriptionApprovedEvent(request);
+            case CANCELLED -> new PolicyCancelledEvent(request);
+            case PENDING -> new PaymentProcessedEvent(request);
+            default -> new PolicyStatusChangedEvent(request);
+        };
+        
         String routingKey = switch (newStatus) {
             case VALIDATED -> RabbitMQConfig.POLICY_VALIDATED_KEY;
             case REJECTED -> RabbitMQConfig.POLICY_REJECTED_KEY;
             case APPROVED -> RabbitMQConfig.POLICY_APPROVED_KEY;
             case CANCELLED -> "policy.cancelled";
+            case PENDING -> RabbitMQConfig.PAYMENT_PROCESSED_KEY;
             default -> "policy.status.changed";
         };
         
         eventPublisher.publish(
             RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
             routingKey,
-            new PolicyRequestEvent(request.getId(), request.getCustomerId(), newStatus) {}
+            event
         );
         
         return request;
@@ -110,49 +119,78 @@ public class PolicyRequestServiceImpl implements PolicyRequestService {
     @Override
     @Transactional
     public void processFraudAnalysis(UUID id) {
-        log.info("Processing fraud analysis for policy request: {}", id);
         PolicyRequest request = findById(id);
         
         try {
             RiskAnalysis riskAnalysis = fraudAnalysisService.analyzeFraud(request);
             request.setRiskAnalysis(riskAnalysis);
             repository.save(request);
-            
             validatePolicyRequest(id);
-            
         } catch (Exception e) {
-            log.error("Error processing fraud analysis for policy request: {}", id, e);
-            updateStatus(id, PolicyRequestStatus.REJECTED);
+            log.error("Error analyzing fraud for policy request: {}", id, e);
+            request.setStatus(PolicyRequestStatus.REJECTED);
+            repository.save(request);
+            eventPublisher.publish(
+                RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
+                RabbitMQConfig.POLICY_REJECTED_KEY,
+                new PolicyRejectedEvent(request)
+            );
         }
     }
 
     @Override
     @Transactional
     public void processPayment(UUID id) {
-        log.info("Processing payment for policy request: {}", id);
         PolicyRequest request = findById(id);
         
-        try {
-            paymentService.processPayment(request);
-            updateStatus(id, PolicyRequestStatus.PENDING);
-        } catch (Exception e) {
-            log.error("Error processing payment for policy request: {}", id, e);
-            updateStatus(id, PolicyRequestStatus.REJECTED);
+        if (request.getStatus() != PolicyRequestStatus.VALIDATED) {
+            throw new IllegalStateException("Cannot process payment for non-validated policy request");
+        }
+        
+        boolean success = paymentService.processPayment(request);
+        
+        if (success) {
+            request.setStatus(PolicyRequestStatus.PENDING);
+            repository.save(request);
+            eventPublisher.publish(
+                RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
+                RabbitMQConfig.PAYMENT_PROCESSED_KEY,
+                new PaymentProcessedEvent(request)
+            );
+        } else {
+            request.setStatus(PolicyRequestStatus.REJECTED);
+            repository.save(request);
+            eventPublisher.publish(
+                RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
+                RabbitMQConfig.PAYMENT_REJECTED_KEY,
+                new PaymentRejectedEvent(request)
+            );
         }
     }
 
     @Override
     @Transactional
     public void processSubscription(UUID id) {
-        log.info("Processing subscription for policy request: {}", id);
         PolicyRequest request = findById(id);
         
         try {
             subscriptionService.processSubscription(request);
-            updateStatus(id, PolicyRequestStatus.APPROVED);
+            request.setStatus(PolicyRequestStatus.APPROVED);
+            repository.save(request);
+            eventPublisher.publish(
+                RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
+                RabbitMQConfig.POLICY_APPROVED_KEY,
+                new SubscriptionApprovedEvent(request)
+            );
         } catch (Exception e) {
             log.error("Error processing subscription for policy request: {}", id, e);
-            updateStatus(id, PolicyRequestStatus.REJECTED);
+            request.setStatus(PolicyRequestStatus.REJECTED);
+            repository.save(request);
+            eventPublisher.publish(
+                RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
+                RabbitMQConfig.POLICY_REJECTED_KEY,
+                new PolicyRejectedEvent(request)
+            );
         }
     }
 
@@ -165,49 +203,24 @@ public class PolicyRequestServiceImpl implements PolicyRequestService {
             throw new IllegalStateException("Cannot cancel an approved policy request");
         }
         
-        updateStatus(id, PolicyRequestStatus.CANCELLED);
+        request.setStatus(PolicyRequestStatus.CANCELLED);
+        repository.save(request);
+        
+        eventPublisher.publish(
+            RabbitMQConfig.POLICY_EVENTS_EXCHANGE,
+            "policy.cancelled",
+            new PolicyCancelledEvent(request)
+        );
     }
 
-    private boolean validateInsuranceAmount(InsuranceCategory category, 
-                                          BigDecimal amount, 
-                                          CustomerRiskType riskType) {
+    private boolean validateInsuranceAmount(InsuranceCategory category, BigDecimal amount, CustomerRiskType riskType) {
         return switch (riskType) {
-            case REGULAR -> validateRegularCustomer(category, amount);
-            case HIGH_RISK -> validateHighRiskCustomer(category, amount);
-            case PREFERRED -> validatePreferredCustomer(category, amount);
-            case NO_INFORMATION -> validateNoInformationCustomer(category, amount);
-        };
-    }
-
-    private boolean validateRegularCustomer(InsuranceCategory category, BigDecimal amount) {
-        return switch (category) {
-            case LIFE, RESIDENTIAL -> amount.compareTo(new BigDecimal("500000.00")) <= 0;
-            case AUTO -> amount.compareTo(new BigDecimal("350000.00")) <= 0;
-            default -> amount.compareTo(new BigDecimal("255000.00")) <= 0;
-        };
-    }
-
-    private boolean validateHighRiskCustomer(InsuranceCategory category, BigDecimal amount) {
-        return switch (category) {
-            case AUTO -> amount.compareTo(new BigDecimal("250000.00")) <= 0;
-            case RESIDENTIAL -> amount.compareTo(new BigDecimal("150000.00")) <= 0;
-            default -> amount.compareTo(new BigDecimal("125000.00")) <= 0;
-        };
-    }
-
-    private boolean validatePreferredCustomer(InsuranceCategory category, BigDecimal amount) {
-        return switch (category) {
-            case LIFE -> amount.compareTo(new BigDecimal("1000000.00")) <= 0;
-            case AUTO -> amount.compareTo(new BigDecimal("750000.00")) <= 0;
-            case RESIDENTIAL -> amount.compareTo(new BigDecimal("850000.00")) <= 0;
-            default -> amount.compareTo(new BigDecimal("500000.00")) <= 0;
-        };
-    }
-
-    private boolean validateNoInformationCustomer(InsuranceCategory category, BigDecimal amount) {
-        return switch (category) {
-            case LIFE, AUTO, RESIDENTIAL -> amount.compareTo(new BigDecimal("100000.00")) <= 0;
-            default -> amount.compareTo(new BigDecimal("50000.00")) <= 0;
+            case REGULAR -> amount.compareTo(new BigDecimal("500000.00")) <= 0;
+            case HIGH_RISK -> amount.compareTo(new BigDecimal("50000.00")) <= 0;
+            case PREFERRED -> amount.compareTo(new BigDecimal("1000000.00")) <= 0;
+            case NO_INFORMATION -> category == InsuranceCategory.LIFE ? 
+                amount.compareTo(new BigDecimal("100000.00")) <= 0 :
+                amount.compareTo(new BigDecimal("50000.00")) <= 0;
         };
     }
 } 

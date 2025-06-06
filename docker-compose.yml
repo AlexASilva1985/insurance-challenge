@@ -1,49 +1,55 @@
-version: '3.8'
-
 services:
-  app:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/insurance
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-      - SPRING_RABBITMQ_HOST=rabbitmq
-    depends_on:
-      - db
-      - rabbitmq
-      - mockserver
-
-  db:
+  postgres:
     image: postgres:15-alpine
+    container_name: insurance-postgres
+    environment:
+      POSTGRES_DB: insurance_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
-    environment:
-      - POSTGRES_DB=insurance
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - insurance-network
+    restart: unless-stopped
 
-  mockserver:
-    image: mockserver/mockserver:latest
-    ports:
-      - "1080:1080"
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: insurance-rabbitmq
     environment:
-      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/initializerJson.json
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"      # AMQP port
+      - "15672:15672"    # Management UI port
     volumes:
-      - ./mockserver:/config
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - insurance-network
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: insurance-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/insurance_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - insurance-network
 
 volumes:
-  postgres_data: 
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  insurance-network:
+    driver: bridge 

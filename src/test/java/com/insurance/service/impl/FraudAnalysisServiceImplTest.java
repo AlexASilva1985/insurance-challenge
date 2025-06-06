@@ -2,8 +2,11 @@ package com.insurance.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -141,6 +144,115 @@ class FraudAnalysisServiceImplTest {
         assertTrue(result.getOccurrences().isEmpty());
 
         verify(fraudAnalysisClient).analyzeFraud(requestId, customerId);
+    }
+
+    @Test
+    void testAnalyzeFraudWithClientError() {
+        when(fraudAnalysisClient.analyzeFraud(eq(requestId), eq(customerId)))
+            .thenThrow(new RuntimeException("API Error"));
+
+        assertThrows(RuntimeException.class, () ->
+            fraudAnalysisService.analyzeFraud(policyRequest)
+        );
+
+        verify(fraudAnalysisClient).analyzeFraud(requestId, customerId);
+    }
+
+    @Test
+    void testAnalyzeFraudWithNullResponse() {
+        when(fraudAnalysisClient.analyzeFraud(eq(requestId), eq(customerId)))
+            .thenReturn(null);
+
+        assertThrows(IllegalStateException.class, () ->
+            fraudAnalysisService.analyzeFraud(policyRequest)
+        );
+
+        verify(fraudAnalysisClient).analyzeFraud(requestId, customerId);
+    }
+
+    @Test
+    void testAnalyzeFraudWithInvalidOccurrenceData() {
+        FraudAnalysisResponse response = createFraudAnalysisResponse(
+            CustomerRiskType.REGULAR,
+            now,
+            List.of(createRiskOccurrenceResponse("", "", now, now))
+        );
+
+        when(fraudAnalysisClient.analyzeFraud(eq(requestId), eq(customerId)))
+            .thenReturn(response);
+
+        assertThrows(IllegalArgumentException.class, () ->
+            fraudAnalysisService.analyzeFraud(policyRequest)
+        );
+    }
+
+    @Test
+    void testAnalyzeFraudWithEmptyFields() {
+        policyRequest.setId(null);
+        policyRequest.setCustomerId(null);
+
+        assertThrows(IllegalArgumentException.class, () ->
+            fraudAnalysisService.analyzeFraud(policyRequest)
+        );
+
+        verify(fraudAnalysisClient, never()).analyzeFraud(any(), any());
+    }
+
+    @Test
+    void testAnalyzeFraudWithNullCustomerId() {
+        policyRequest.setCustomerId(null);
+
+        assertThrows(IllegalArgumentException.class, () ->
+            fraudAnalysisService.analyzeFraud(policyRequest)
+        );
+
+        verify(fraudAnalysisClient, never()).analyzeFraud(any(), any());
+    }
+
+    @Test
+    void testAnalyzeFraudWithNullRequestId() {
+        policyRequest.setId(null);
+
+        assertThrows(IllegalArgumentException.class, () ->
+            fraudAnalysisService.analyzeFraud(policyRequest)
+        );
+
+        verify(fraudAnalysisClient, never()).analyzeFraud(any(), any());
+    }
+
+    @Test
+    void testAnalyzeFraudWithFutureAnalyzedAt() {
+        FraudAnalysisResponse response = createFraudAnalysisResponse(
+            CustomerRiskType.REGULAR,
+            now.plusDays(1), // Data futura
+            List.of()
+        );
+
+        when(fraudAnalysisClient.analyzeFraud(eq(requestId), eq(customerId)))
+            .thenReturn(response);
+
+        assertThrows(IllegalArgumentException.class, () ->
+            fraudAnalysisService.analyzeFraud(policyRequest)
+        );
+    }
+
+    @Test
+    void testAnalyzeFraudWithAllRiskTypes() {
+        for (CustomerRiskType riskType : CustomerRiskType.values()) {
+            FraudAnalysisResponse response = createFraudAnalysisResponse(
+                riskType,
+                now,
+                List.of()
+            );
+
+            when(fraudAnalysisClient.analyzeFraud(eq(requestId), eq(customerId)))
+                .thenReturn(response);
+
+            RiskAnalysis result = fraudAnalysisService.analyzeFraud(policyRequest);
+
+            assertNotNull(result);
+            assertEquals(riskType, result.getClassification());
+        }
     }
 
     private FraudAnalysisResponse createFraudAnalysisResponse(

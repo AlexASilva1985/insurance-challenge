@@ -1,23 +1,8 @@
 package com.insurance.service.impl;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.insurance.domain.PolicyRequest;
 import com.insurance.domain.RiskAnalysis;
-import com.insurance.domain.enums.CustomerRiskType;
-import com.insurance.domain.enums.InsuranceCategory;
-import com.insurance.domain.enums.PaymentMethod;
-import com.insurance.domain.enums.PolicyRequestStatus;
-import com.insurance.domain.enums.SalesChannel;
+import com.insurance.domain.enums.*;
 import com.insurance.event.PolicyRequestCreatedEvent;
 import com.insurance.event.PolicyRequestEvent;
 import com.insurance.infrastructure.messaging.config.RabbitMQConfig;
@@ -27,21 +12,23 @@ import com.insurance.service.FraudAnalysisService;
 import com.insurance.service.PaymentService;
 import com.insurance.service.SubscriptionService;
 import jakarta.persistence.EntityNotFoundException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.*;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class PolicyRequestServiceImplTest {
@@ -198,25 +185,68 @@ class PolicyRequestServiceImplTest {
 
     @Test
     void testProcessPaymentSuccess() {
-        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
-        when(repository.save(any(PolicyRequest.class))).thenReturn(policyRequest);
+        // Arrange
+        policyRequest.setStatus(PolicyRequestStatus.VALIDATED);
+        policyRequest.setPaymentMethod(PaymentMethod.CREDIT_CARD);
 
+        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
+        when(repository.save(any(PolicyRequest.class))).thenAnswer(invocation -> {
+            PolicyRequest savedRequest = invocation.getArgument(0);
+            policyRequest.setStatus(savedRequest.getStatus());
+            return policyRequest;
+        });
+        when(paymentService.processPayment(policyRequest)).thenReturn(true);
+
+        // Act
         policyRequestService.processPayment(requestId);
 
+        // Assert
         verify(paymentService).processPayment(policyRequest);
         verify(repository).save(any(PolicyRequest.class));
+        verify(eventPublisher).publish(
+            eq(RabbitMQConfig.POLICY_EVENTS_EXCHANGE),
+            eq(RabbitMQConfig.PAYMENT_PROCESSED_KEY),
+            eventCaptor.capture()
+        );
+
+        PolicyRequestEvent event = eventCaptor.getValue();
+        assertEquals(requestId, event.getPolicyRequestId());
+        assertEquals(customerId, event.getCustomerId());
+        assertEquals(PolicyRequestStatus.PENDING, event.getStatus());
+        assertEquals(PolicyRequestStatus.PENDING, policyRequest.getStatus());
     }
 
     @Test
     void testProcessPaymentFailure() {
-        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
-        when(repository.save(any(PolicyRequest.class))).thenReturn(policyRequest);
-        doThrow(new RuntimeException("Payment failed")).when(paymentService).processPayment(policyRequest);
+        // Arrange
+        policyRequest.setStatus(PolicyRequestStatus.VALIDATED);
+        policyRequest.setPaymentMethod(PaymentMethod.CREDIT_CARD);
 
+        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
+        when(repository.save(any(PolicyRequest.class))).thenAnswer(invocation -> {
+            PolicyRequest savedRequest = invocation.getArgument(0);
+            policyRequest.setStatus(savedRequest.getStatus());
+            return policyRequest;
+        });
+        when(paymentService.processPayment(policyRequest)).thenReturn(false);
+
+        // Act
         policyRequestService.processPayment(requestId);
 
+        // Assert
         verify(paymentService).processPayment(policyRequest);
         verify(repository).save(any(PolicyRequest.class));
+        verify(eventPublisher).publish(
+            eq(RabbitMQConfig.POLICY_EVENTS_EXCHANGE),
+            eq(RabbitMQConfig.PAYMENT_REJECTED_KEY),
+            eventCaptor.capture()
+        );
+
+        PolicyRequestEvent event = eventCaptor.getValue();
+        assertEquals(requestId, event.getPolicyRequestId());
+        assertEquals(customerId, event.getCustomerId());
+        assertEquals(PolicyRequestStatus.REJECTED, event.getStatus());
+        assertEquals(PolicyRequestStatus.REJECTED, policyRequest.getStatus());
     }
 
     @Test
@@ -308,5 +338,160 @@ class PolicyRequestServiceImplTest {
         policyRequestService.validatePolicyRequest(requestId);
 
         verify(repository).save(any(PolicyRequest.class));
+    }
+
+    @Test
+    void testValidateRegularCustomerWithDifferentCategories() {
+        RiskAnalysis riskAnalysis = new RiskAnalysis();
+        riskAnalysis.setClassification(CustomerRiskType.REGULAR);
+        policyRequest.setRiskAnalysis(riskAnalysis);
+        
+        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
+        when(repository.save(any(PolicyRequest.class))).thenReturn(policyRequest);
+
+        for (InsuranceCategory category : InsuranceCategory.values()) {
+            policyRequest.setCategory(category);
+            policyRequest.setInsuredAmount(new BigDecimal("500000.00"));
+            policyRequest.setStatus(PolicyRequestStatus.RECEIVED);
+
+            policyRequestService.validatePolicyRequest(requestId);
+        }
+
+        // Verify calls based on number of categories
+        verify(repository, times(InsuranceCategory.values().length)).save(policyRequest);
+        verify(eventPublisher, times(InsuranceCategory.values().length)).publish(
+            eq(RabbitMQConfig.POLICY_EVENTS_EXCHANGE),
+            eq(RabbitMQConfig.POLICY_VALIDATED_KEY),
+            eventCaptor.capture()
+        );
+
+        // Check the last captured event
+        PolicyRequestEvent event = eventCaptor.getValue();
+        assertEquals(requestId, event.getPolicyRequestId());
+        assertEquals(customerId, event.getCustomerId());
+        assertEquals(PolicyRequestStatus.VALIDATED, event.getStatus());
+    }
+
+    @Test
+    void testValidateHighRiskCustomerWithDifferentCategories() {
+        RiskAnalysis riskAnalysis = new RiskAnalysis();
+        riskAnalysis.setClassification(CustomerRiskType.HIGH_RISK);
+        policyRequest.setRiskAnalysis(riskAnalysis);
+        
+        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
+        when(repository.save(any(PolicyRequest.class))).thenReturn(policyRequest);
+
+        for (InsuranceCategory category : InsuranceCategory.values()) {
+            policyRequest.setCategory(category);
+            policyRequest.setInsuredAmount(new BigDecimal("100000.00"));
+            policyRequest.setStatus(PolicyRequestStatus.RECEIVED);
+
+            policyRequestService.validatePolicyRequest(requestId);
+        }
+
+        // Verify calls based on number of categories
+        verify(repository, times(InsuranceCategory.values().length)).save(policyRequest);
+        verify(eventPublisher, times(InsuranceCategory.values().length)).publish(
+            eq(RabbitMQConfig.POLICY_EVENTS_EXCHANGE),
+            eq(RabbitMQConfig.POLICY_REJECTED_KEY),
+            eventCaptor.capture()
+        );
+
+        // Check the last captured event
+        PolicyRequestEvent event = eventCaptor.getValue();
+        assertEquals(requestId, event.getPolicyRequestId());
+        assertEquals(customerId, event.getCustomerId());
+        assertEquals(PolicyRequestStatus.REJECTED, event.getStatus());
+    }
+
+    @Test
+    void testValidatePreferredCustomerWithDifferentCategories() {
+        RiskAnalysis riskAnalysis = new RiskAnalysis();
+        riskAnalysis.setClassification(CustomerRiskType.PREFERRED);
+        policyRequest.setRiskAnalysis(riskAnalysis);
+        
+        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
+        when(repository.save(any(PolicyRequest.class))).thenReturn(policyRequest);
+
+        for (InsuranceCategory category : InsuranceCategory.values()) {
+            policyRequest.setCategory(category);
+            policyRequest.setInsuredAmount(new BigDecimal("1000000.00"));
+            policyRequest.setStatus(PolicyRequestStatus.RECEIVED);
+
+            policyRequestService.validatePolicyRequest(requestId);
+        }
+
+        // Verify calls based on number of categories
+        verify(repository, times(InsuranceCategory.values().length)).save(policyRequest);
+        verify(eventPublisher, times(InsuranceCategory.values().length)).publish(
+            eq(RabbitMQConfig.POLICY_EVENTS_EXCHANGE),
+            eq(RabbitMQConfig.POLICY_VALIDATED_KEY),
+            eventCaptor.capture()
+        );
+
+        // Check the last captured event
+        PolicyRequestEvent event = eventCaptor.getValue();
+        assertEquals(requestId, event.getPolicyRequestId());
+        assertEquals(customerId, event.getCustomerId());
+        assertEquals(PolicyRequestStatus.VALIDATED, event.getStatus());
+    }
+
+    @Test
+    void testValidateNoInformationCustomerWithDifferentCategories() {
+        RiskAnalysis riskAnalysis = new RiskAnalysis();
+        riskAnalysis.setClassification(CustomerRiskType.NO_INFORMATION);
+        
+        // Test LIFE insurance within limit
+        policyRequest.setCategory(InsuranceCategory.LIFE);
+        policyRequest.setInsuredAmount(new BigDecimal("100000.00"));
+        policyRequest.setRiskAnalysis(riskAnalysis);
+        
+        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
+        when(repository.save(any(PolicyRequest.class))).thenReturn(policyRequest);
+
+        policyRequestService.validatePolicyRequest(requestId);
+        assertEquals(PolicyRequestStatus.VALIDATED, policyRequest.getStatus());
+
+        // Test other category above limit
+        policyRequest.setCategory(InsuranceCategory.TRAVEL);
+        policyRequest.setInsuredAmount(new BigDecimal("75000.00"));
+        
+        policyRequestService.validatePolicyRequest(requestId);
+        assertEquals(PolicyRequestStatus.REJECTED, policyRequest.getStatus());
+    }
+
+    @Test
+    void testStatusTransitionValidations() {
+        when(repository.findById(requestId)).thenReturn(Optional.of(policyRequest));
+        when(repository.save(any(PolicyRequest.class))).thenReturn(policyRequest);
+
+        // Test valid transitions
+        policyRequest.setStatus(PolicyRequestStatus.RECEIVED);
+        policyRequestService.updateStatus(requestId, PolicyRequestStatus.VALIDATED);
+        assertEquals(PolicyRequestStatus.VALIDATED, policyRequest.getStatus());
+
+        policyRequest.setStatus(PolicyRequestStatus.VALIDATED);
+        policyRequestService.updateStatus(requestId, PolicyRequestStatus.PENDING);
+        assertEquals(PolicyRequestStatus.PENDING, policyRequest.getStatus());
+
+        policyRequest.setStatus(PolicyRequestStatus.PENDING);
+        policyRequestService.updateStatus(requestId, PolicyRequestStatus.APPROVED);
+        assertEquals(PolicyRequestStatus.APPROVED, policyRequest.getStatus());
+
+        // Test invalid transitions
+        policyRequest.setStatus(PolicyRequestStatus.REJECTED);
+        assertThrows(IllegalStateException.class, () ->
+            policyRequestService.updateStatus(requestId, PolicyRequestStatus.VALIDATED)
+        );
+
+        policyRequest.setStatus(PolicyRequestStatus.APPROVED);
+        assertThrows(IllegalStateException.class, () ->
+            policyRequestService.updateStatus(requestId, PolicyRequestStatus.PENDING)
+        );
+
+        policyRequest.setStatus(PolicyRequestStatus.CANCELLED);
+        assertThrows(IllegalStateException.class, () ->
+            policyRequestService.updateStatus(requestId, PolicyRequestStatus.VALIDATED)
+        );
     }
 } 

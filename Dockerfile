@@ -1,12 +1,20 @@
-FROM eclipse-temurin:17-jdk-alpine as build
+FROM eclipse-temurin:17-jdk-alpine AS build
 WORKDIR /workspace/app
 
-COPY mvnw .
-COPY .mvn .mvn
+# Install Maven
+RUN apk add --no-cache maven
+
+# Copy Maven pom
 COPY pom.xml .
+
+# Download dependencies (for better caching)
+RUN mvn dependency:go-offline -B
+
+# Copy source code
 COPY src src
 
-RUN ./mvnw install -DskipTests
+# Build the application
+RUN mvn clean package -DskipTests -B
 RUN mkdir -p target/dependency && (cd target/dependency; jar -xf ../*.jar)
 
 FROM eclipse-temurin:17-jre-alpine
